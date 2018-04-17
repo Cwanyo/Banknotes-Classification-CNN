@@ -14,7 +14,7 @@ from keras.layers import Input, Dense, Dropout, Flatten, Conv2D, MaxPooling2D
 from keras import backend as K
 
 import tensorflow as tf
-from tensorflow.python.tools import freeze_graph
+from tensorflow.python.tools import freeze_graph, optimize_for_inference_lib
 from tensorflow.python.platform import gfile
 
 import Dataset
@@ -68,7 +68,7 @@ def train(model, x_train, y_train, x_valid, y_valid, batch_size, epochs, log_dir
     return model
 
 
-def evaluate(model, classes, x_test, y_test):
+def evaluate(model, classes, x_test, y_test, output_dir):
     print('_________________________________________________________________')
     # Evaluate with testing data
     evaluation = model.evaluate(x_test, y_test)
@@ -78,12 +78,23 @@ def evaluate(model, classes, x_test, y_test):
     # Get prediction from given x_test
     y_pred = model.predict_classes(x_test)
 
+    cr = classification_report(np.argmax(y_test, axis=1), y_pred, target_names=classes)
     # Get report
-    print(classification_report(np.argmax(y_test, axis=1), y_pred, target_names=classes))
+    print(cr)
 
     # Get confusion matrix
     cm = confusion_matrix(np.argmax(y_test, axis=1), y_pred)
     plot_confusion_matrix(cm, classes)
+
+    # Save evaluate files
+    plt.savefig(output_dir + 'confusion_matrix.jpg')
+
+    with open(output_dir + 'confusion_matrix.txt', 'w') as f:
+        f.write(np.array2string(cm, separator=', '))
+
+    with open(output_dir + 'classification_report.txt', 'w') as f:
+        f.write(cr)
+
     print('=================================================================')
 
 
@@ -115,8 +126,6 @@ def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix'
 
 
 def save_model(model, classes, model_name, input_node_names, output_node_name, output_dir):
-    prepare_dir(output_dir)
-
     # Save model config
     model_json = model.to_json()
     with open(output_dir + 'model_config.json', 'w') as f:
@@ -131,12 +140,27 @@ def save_model(model, classes, model_name, input_node_names, output_node_name, o
         f.write('\n'.join(classes) + '\n')
 
     # Save trained model with the weights stored as constants
-    tf.train.write_graph(K.get_session().graph_def, output_dir, model_name + '_graph.pbtxt')
-    tf.train.Saver().save(K.get_session(), output_dir + model_name + '.chkp')
+    temp_dir = output_dir + 'temp/'
 
-    freeze_graph.freeze_graph(output_dir + model_name + '_graph.pbtxt', None, False,
-                              output_dir + model_name + '.chkp', output_node_name, 'save/restore_all', 'save/Const:0',
+    tf.train.write_graph(K.get_session().graph_def, temp_dir, model_name + '_graph.pbtxt')
+    tf.train.Saver().save(K.get_session(), temp_dir + model_name + '.chkp')
+
+    freeze_graph.freeze_graph(temp_dir + model_name + '_graph.pbtxt', None, False,
+                              temp_dir + model_name + '.chkp', output_node_name, 'save/restore_all', 'save/Const:0',
                               output_dir + 'frozen_' + model_name + '.pb', True, '')
+
+    # Save opt model
+    # NOTE* - There is some problem, TensorFlow Lite cannot use this graph due to some error
+    input_graph_def = tf.GraphDef()
+    with tf.gfile.Open(output_dir + 'frozen_' + model_name + '.pb', "rb") as f:
+        input_graph_def.ParseFromString(f.read())
+
+    output_graph_def = optimize_for_inference_lib.optimize_for_inference(input_graph_def, input_node_names,
+                                                                         [output_node_name],
+                                                                         tf.float32.as_datatype_enum)
+
+    with tf.gfile.FastGFile(output_dir + 'opt_' + model_name + '.pb', "wb") as f:
+        f.write(output_graph_def.SerializeToString())
 
 
 def prepare_dir(path):
@@ -184,7 +208,7 @@ def main():
     num_channels = 3
 
     batch_size = 32
-    epochs = 30  # 30
+    epochs = 30
 
     learning_rate = 1.0
 
@@ -225,12 +249,14 @@ def main():
     log_dir += hparam_str
     output_dir += hparam_str
 
+    prepare_dir(output_dir)
+
     model = train(model=model,
                   x_train=x_train, y_train=y_train,
                   x_valid=x_valid, y_valid=y_valid,
                   batch_size=batch_size, epochs=epochs, log_dir=log_dir)
 
-    evaluate(model=model, classes=classes, x_test=x_test, y_test=y_test)
+    evaluate(model=model, classes=classes, x_test=x_test, y_test=y_test, output_dir=output_dir)
 
     # Save model as file
     save_model(model, classes, model_name, ['conv2d_1_input'], 'dense_2/Softmax', output_dir)
