@@ -10,14 +10,14 @@ import itertools
 
 import keras
 from keras.models import Sequential
-from keras.layers import Input, Dense, Dropout, Flatten, Conv2D, MaxPooling2D
+from keras.layers import Dense, Dropout, Flatten, Conv2D, MaxPooling2D
 from keras import backend as K
 
 import tensorflow as tf
 from tensorflow.python.tools import freeze_graph, optimize_for_inference_lib
 from tensorflow.python.platform import gfile
 
-import Dataset
+import Data
 
 
 def build_model(img_size, num_channels, num_classes, learning_rate):
@@ -155,7 +155,8 @@ def save_model(model, classes, model_name, input_node_names, output_node_name, o
     with tf.gfile.Open(output_dir + 'frozen_' + model_name + '.pb', "rb") as f:
         input_graph_def.ParseFromString(f.read())
 
-    output_graph_def = optimize_for_inference_lib.optimize_for_inference(input_graph_def, input_node_names,
+    output_graph_def = optimize_for_inference_lib.optimize_for_inference(input_graph_def,
+                                                                         [input_node_names],
                                                                          [output_node_name],
                                                                          tf.float32.as_datatype_enum)
 
@@ -200,8 +201,8 @@ def main():
     # Config
     model_name = 'banknotes_convnet'
 
-    img_dir = '../files/thaibaht_photos/'
-    output_dir = '../files/models/'
+    train_data_dir = '../files/thaibaht_photos_same/train'
+    valid_data_dir = '../files/thaibaht_photos_same/valid'
     log_dir = '../files/training_logs/'
 
     img_size = 128
@@ -212,15 +213,17 @@ def main():
 
     learning_rate = 1.0
 
-    validation_percentage = 0.1
-    testing_percentage = 0.3
+    train_data, train_classes = Data.load_data(train_data_dir, img_size)
+    valid_data, valid_classes = Data.load_data(valid_data_dir, img_size)
 
-    datasets = Dataset.read_datasets(img_dir, img_size, validation_percentage, testing_percentage)
+    classes = train_classes
+    num_classes = len(train_classes)
 
-    classes = datasets.classes
-    num_classes = len(classes)
-
+    # TODO - Create new model
     model = build_model(img_size, num_channels, num_classes, learning_rate)
+
+    input_node_names = model.input.name.split(':')[0]
+    output_node_name = model.output.name.split(':')[0]
 
     # View model
     model.summary()
@@ -229,25 +232,20 @@ def main():
     print('Approximately memory usage : {} gb'.format(get_model_memory_usage(batch_size, model)))
 
     # Get data and shuffle
-    x_train = datasets.training_data.images_data
-    y_train = datasets.training_data.labels_onehot
+    x_train = train_data.images_data
+    y_train = train_data.labels_onehot
 
-    x_train, y_train = shuffle(x_train, y_train, random_state=1)
+    x_train, y_train = shuffle(x_train, y_train, random_state=2)
 
-    x_valid = datasets.validation_data.images_data
-    y_valid = datasets.validation_data.labels_onehot
+    x_valid = valid_data.images_data
+    y_valid = valid_data.labels_onehot
 
     x_valid, y_valid = shuffle(x_valid, y_valid, random_state=2)
-
-    x_test = datasets.testing_data.images_data
-    y_test = datasets.testing_data.labels_onehot
-
-    x_test, y_test = shuffle(x_test, y_test, random_state=3)
 
     # Get folder name
     hparam_str = make_hparam_string(learning_rate, batch_size, epochs)
     log_dir += hparam_str
-    output_dir += hparam_str
+    output_dir = log_dir + 'model/'
 
     prepare_dir(output_dir)
 
@@ -256,10 +254,10 @@ def main():
                   x_valid=x_valid, y_valid=y_valid,
                   batch_size=batch_size, epochs=epochs, log_dir=log_dir)
 
-    evaluate(model=model, classes=classes, x_test=x_test, y_test=y_test, output_dir=output_dir)
+    evaluate(model=model, classes=classes, x_test=x_valid, y_test=y_valid, output_dir=output_dir)
 
     # Save model as file
-    save_model(model, classes, model_name, ['conv2d_1_input'], 'dense_2/Softmax', output_dir)
+    save_model(model, classes, model_name, input_node_names, output_node_name, output_dir)
 
     plt.show()
     print('--end--')
