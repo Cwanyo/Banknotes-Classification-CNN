@@ -4,6 +4,7 @@ import re
 import cv2
 import numpy as np
 
+from keras.preprocessing.image import ImageDataGenerator
 from sklearn.utils import shuffle
 from tensorflow.python.platform import gfile
 import matplotlib.pyplot as plt
@@ -171,3 +172,35 @@ def load_data(img_dir, img_size):
     print('_________________________________________________________________')
 
     return x, y, classes
+
+
+def load_data_generator(train_data_dir, valid_data_dir, img_size, batch_size):
+    # Random distortion
+    # train_datagen = ImageDataGenerator(
+    #     rescale=1. / 255,
+    #     shear_range=0.2,
+    #     zoom_range=0.2,
+    #     horizontal_flip=True)
+    train_datagen = ImageDataGenerator(rescale=1. / 255)
+
+    valid_datagen = ImageDataGenerator(rescale=1. / 255)
+
+    train_generator = train_datagen.flow_from_directory(
+        train_data_dir,
+        target_size=(img_size, img_size),
+        color_mode='rgb',
+        class_mode='categorical',
+        batch_size=batch_size,
+        shuffle=True, seed=4
+    )
+
+    valid_generator = valid_datagen.flow_from_directory(
+        valid_data_dir,
+        target_size=(img_size, img_size),
+        color_mode='rgb',
+        class_mode='categorical',
+        batch_size=batch_size,
+        shuffle=False
+    )
+
+    return train_generator, valid_generator

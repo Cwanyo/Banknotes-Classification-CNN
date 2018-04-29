@@ -65,36 +65,36 @@ def build_model(img_size, num_channels, num_classes, learning_rate):
     return model
 
 
-def train(model, x_train, y_train, x_valid, y_valid, batch_size, epochs, log_dir):
+def train(model, train_generator, valid_generator, batch_size, epochs, log_dir):
     # Use tensorboard
     # cli => tensorboard --logdir path_to_dir
     tensorboard = keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=0, write_graph=True,
                                               batch_size=batch_size)
 
-    # Train
-    # NOTE* - The validation set is checked during training to monitor progress,
-    # and possibly for early stopping, but is never used for gradient descent.
-    # REF -> https://github.com/keras-team/keras/issues/1753
-    model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=2,
-              validation_data=(x_valid, y_valid), callbacks=[tensorboard])
+    model.fit_generator(generator=train_generator, epochs=epochs, verbose=2, validation_data=valid_generator,
+                        callbacks=[tensorboard])
+
+    return model
 
 
-def evaluate(model, classes, x_test, y_test, output_dir):
+def evaluate(model, valid_generator, classes, output_dir):
     print('_________________________________________________________________')
     # Evaluate with testing data
-    evaluation = model.evaluate(x_test, y_test)
+    evaluation = model.evaluate_generator(generator=valid_generator)
 
     print('Summary: Loss over the testing dataset: %.2f, Accuracy: %.2f' % (evaluation[0], evaluation[1]))
 
     # Get prediction from given x_test
-    y_pred = model.predict_classes(x_test)
+    y_pred = model.predict_generator(generator=valid_generator)
+    y_pred = np.argmax(y_pred, axis=1)
+    y_true = valid_generator.classes
 
-    cr = classification_report(np.argmax(y_test, axis=1), y_pred, target_names=classes)
     # Get report
+    cr = classification_report(y_true, y_pred, target_names=classes)
     print(cr)
 
     # Get confusion matrix
-    cm = confusion_matrix(np.argmax(y_test, axis=1), y_pred)
+    cm = confusion_matrix(y_true, y_pred)
     plot_confusion_matrix(cm, classes)
 
     # Save evaluate files
@@ -223,15 +223,14 @@ def main():
     num_channels = 3
 
     batch_size = 32
-    epochs = 30
+    epochs = 2
 
     learning_rate = 0.001
 
-    x_train, y_train, train_classes = Data.load_data(train_data_dir, img_size)
-    x_valid, y_valid, valid_classes = Data.load_data(valid_data_dir, img_size)
+    train_generator, valid_generator = Data.load_data_generator(train_data_dir, valid_data_dir, img_size, batch_size)
 
-    classes = train_classes
-    num_classes = len(train_classes)
+    classes = list(train_generator.class_indices)
+    num_classes = train_generator.num_classes
 
     # TODO - Create new model
     model = build_model(img_size, num_channels, num_classes, learning_rate)
@@ -255,12 +254,9 @@ def main():
 
     prepare_dir(output_dir)
 
-    train(model=model,
-          x_train=x_train, y_train=y_train,
-          x_valid=x_valid, y_valid=y_valid,
-          batch_size=batch_size, epochs=epochs, log_dir=log_dir)
+    train(model, train_generator, valid_generator, batch_size, epochs, log_dir)
 
-    evaluate(model=model, classes=classes, x_test=x_valid, y_test=y_valid, output_dir=output_dir)
+    evaluate(model, valid_generator, classes, output_dir)
 
     # Save model as file
     save_model(model, classes, model_name, input_node_names, output_node_name, output_dir)
