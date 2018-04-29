@@ -16,6 +16,58 @@ class Dataset:
         self.labels_name = []
 
 
+def read_image_resize_ratio(img_file, img_size):
+    # Read image
+    img = cv2.imread(img_file)
+
+    # cv2 load image as BGR, so convert to RGB
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    # Find resize scale
+    min_size = min(img.shape[0], img.shape[1])
+    scale = 1 / (min_size / img_size)
+
+    # Resize image to nearest img_size
+    # REF: http://tanbakuchi.com/posts/comparison-of-openv-interpolation-algorithms/
+    img = cv2.resize(img, dsize=None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    # img = cv2.resize(img, dsize=None, fx=scale, fy=scale)
+
+    # Crop center
+    height, width, channels = img.shape
+    upper_left = (int((width - img_size) / 2), int((height - img_size) / 2))
+    bottom_right = (int((width - img_size) / 2) + img_size, int((height - img_size) / 2) + img_size)
+    img = img[upper_left[1]: bottom_right[1], upper_left[0]: bottom_right[0]].copy()
+
+    # Save as float 32
+    img = img.astype(np.float32)
+
+    # Get value between 0-1 from 0-255
+    img = np.multiply(img, 1.0 / 255.0)
+
+    return img
+
+
+def read_image_resize(img_file, img_size):
+    # Read image
+    img = cv2.imread(img_file)
+
+    # cv2 load image as BGR, so convert to RGB
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    # Resize image
+    # REF: http://tanbakuchi.com/posts/comparison-of-openv-interpolation-algorithms/
+    img = cv2.resize(img, (img_size, img_size), interpolation=cv2.INTER_AREA)
+    # img = cv2.resize(img, (img_size, img_size))
+
+    # Save as float 32
+    img = img.astype(np.float32)
+
+    # Get value between 0-1 from 0-255
+    img = np.multiply(img, 1.0 / 255.0)
+
+    return img
+
+
 def load_data(img_dir, img_size):
     if not gfile.Exists(img_dir):
         print('Image directory ' + img_dir + ' not found.')
@@ -30,8 +82,6 @@ def load_data(img_dir, img_size):
     classes = []
 
     data = Dataset()
-    #
-    #
 
     # For each class
     for sub_dir in sub_dirs:
@@ -77,20 +127,11 @@ def load_data(img_dir, img_size):
             # Get label name
             label_name.append(label)
 
-            # Read image
-            img = cv2.imread(file)
+            # Read image and resize, ratio resize -> center cropping
+            img = read_image_resize_ratio(file, img_size)
 
-            # cv2 load image as BGR, so convert to RGB
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-            # Resize image
-            img = cv2.resize(img, (img_size, img_size))
-
-            # Save as float 32
-            img = img.astype(np.float32)
-
-            # Get value between 0-1 from 0-255
-            img = np.multiply(img, 1.0 / 255.0)
+            # Read image and resize, squashing
+            # img = read_image_resize(file, img_size)
 
             img_data.append(img)
 
@@ -120,4 +161,3 @@ def load_data(img_dir, img_size):
     print('_________________________________________________________________')
 
     return data, classes
-

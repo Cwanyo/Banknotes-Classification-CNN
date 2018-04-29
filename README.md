@@ -3,6 +3,6 @@
 ### Investigate the changes with TensorBoard
 
 ```bash
-$ tensorboard --logdir files/training_logs &
+$ tensorboard --logdir files/training_logs
 ```
 
