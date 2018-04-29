@@ -4,7 +4,9 @@ import re
 import cv2
 import numpy as np
 
+from sklearn.utils import shuffle
 from tensorflow.python.platform import gfile
+import matplotlib.pyplot as plt
 
 
 class Dataset:
@@ -12,8 +14,9 @@ class Dataset:
     def __init__(self):
         self.images_data = []
         self.labels_onehot = []
-        self.images_name = []
-        self.labels_name = []
+        # TODO - not require (optional)
+        # self.images_name = []
+        # self.labels_name = []
 
 
 def read_image_resize_ratio(img_file, img_size):
@@ -133,6 +136,9 @@ def load_data(img_dir, img_size):
             # Read image and resize, squashing
             # img = read_image_resize(file, img_size)
 
+            # plt.imshow(img)
+            # plt.show()
+
             img_data.append(img)
 
             # One-Hot Label
@@ -149,15 +155,19 @@ def load_data(img_dir, img_size):
 
         data.images_data.extend(img_data)
         data.labels_onehot.extend(label_onehot)
-        data.images_name.extend(img_name)
-        data.labels_name.extend(label_name)
+        # TODO - not require (optional)
+        # data.images_name.extend(img_name)
+        # data.labels_name.extend(label_name)
 
     data.images_data = np.array(data.images_data)
     data.labels_onehot = np.array(data.labels_onehot)
-    data.images_name = np.array(data.images_name)
-    data.labels_name = np.array(data.labels_name)
+    # TODO - not require (optional)
+    # data.images_name = np.array(data.images_name)
+    # data.labels_name = np.array(data.labels_name)
+
+    x, y = shuffle(data.images_data, data.labels_onehot, random_state=2)
 
     print('Total = {} images'.format(len(data.images_data)))
     print('_________________________________________________________________')
 
-    return data, classes
+    return x, y, classes

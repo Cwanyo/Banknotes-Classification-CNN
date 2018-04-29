@@ -2,7 +2,6 @@ import time
 
 import numpy as np
 
-from sklearn.utils import shuffle
 from sklearn.metrics import confusion_matrix, classification_report
 
 from matplotlib import pyplot as plt
@@ -23,26 +22,26 @@ import Data
 def build_model(img_size, num_channels, num_classes, learning_rate):
     model = Sequential()
 
-    model.add(Conv2D(filters=32, kernel_size=(3, 3), padding='same', activation='relu',
+    model.add(Conv2D(filters=16, kernel_size=(3, 3), padding='same', activation='relu',
                      input_shape=[img_size, img_size, num_channels]))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
 
-    model.add(Conv2D(filters=64, kernel_size=(3, 3), padding='same', activation='relu'))
+    model.add(Conv2D(filters=32, kernel_size=(3, 3), padding='same', activation='relu'))
     model.add(BatchNormalization(axis=3))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
     model.add(Dropout(0.4))
 
-    model.add(Conv2D(filters=128, kernel_size=(3, 3), padding='same', activation='relu'))
+    model.add(Conv2D(filters=64, kernel_size=(3, 3), padding='same', activation='relu'))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
     model.add(BatchNormalization(axis=3))
     model.add(Dropout(0.2))
 
-    model.add(Conv2D(filters=192, kernel_size=(3, 3), padding='same', activation='relu'))
+    model.add(Conv2D(filters=128, kernel_size=(3, 3), padding='same', activation='relu'))
     model.add(BatchNormalization(axis=3))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
     model.add(Dropout(0.4))
 
-    model.add(Conv2D(filters=256, kernel_size=(3, 3), padding='same', activation='relu'))
+    model.add(Conv2D(filters=192, kernel_size=(3, 3), padding='same', activation='relu'))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
     model.add(BatchNormalization(axis=3))
     model.add(Dropout(0.2))
@@ -69,14 +68,14 @@ def build_model(img_size, num_channels, num_classes, learning_rate):
 def train(model, x_train, y_train, x_valid, y_valid, batch_size, epochs, log_dir):
     # Use tensorboard
     # cli => tensorboard --logdir path_to_dir
-    tensorboard = keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, write_graph=True,
+    tensorboard = keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=0, write_graph=True,
                                               batch_size=batch_size)
 
     # Train
     # NOTE* - The validation set is checked during training to monitor progress,
     # and possibly for early stopping, but is never used for gradient descent.
     # REF -> https://github.com/keras-team/keras/issues/1753
-    model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=1,
+    model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=2,
               validation_data=(x_valid, y_valid), callbacks=[tensorboard])
 
 
@@ -228,8 +227,8 @@ def main():
 
     learning_rate = 0.001
 
-    train_data, train_classes = Data.load_data(train_data_dir, img_size)
-    valid_data, valid_classes = Data.load_data(valid_data_dir, img_size)
+    x_train, y_train, train_classes = Data.load_data(train_data_dir, img_size)
+    x_valid, y_valid, valid_classes = Data.load_data(valid_data_dir, img_size)
 
     classes = train_classes
     num_classes = len(train_classes)
@@ -245,17 +244,6 @@ def main():
 
     # Check memory needed
     print('Approximately memory usage : {} gb'.format(get_model_memory_usage(batch_size, model)))
-
-    # Get data and shuffle
-    x_train = train_data.images_data
-    y_train = train_data.labels_onehot
-
-    x_train, y_train = shuffle(x_train, y_train, random_state=2)
-
-    x_valid = valid_data.images_data
-    y_valid = valid_data.labels_onehot
-
-    x_valid, y_valid = shuffle(x_valid, y_valid, random_state=2)
 
     # Get opt name
     opt_name = model.optimizer.__class__.__name__
