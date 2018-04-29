@@ -10,42 +10,55 @@ import itertools
 
 import keras
 from keras.models import Sequential
-from keras.layers import Input, Dense, Dropout, Flatten, Conv2D, MaxPooling2D
+from keras.layers import Dense, Dropout, Flatten, Conv2D, MaxPooling2D, BatchNormalization
 from keras import backend as K
 
 import tensorflow as tf
 from tensorflow.python.tools import freeze_graph, optimize_for_inference_lib
 from tensorflow.python.platform import gfile
 
-import Dataset
+import Data
 
 
 def build_model(img_size, num_channels, num_classes, learning_rate):
     model = Sequential()
 
-    model.add(Conv2D(filters=32, kernel_size=(5, 5), padding='same', activation='relu',
+    model.add(Conv2D(filters=32, kernel_size=(3, 3), padding='same', activation='relu',
                      input_shape=[img_size, img_size, num_channels]))
-
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
 
-    model.add(Conv2D(filters=32, kernel_size=(5, 5), padding='same', activation='relu'))
-
+    model.add(Conv2D(filters=64, kernel_size=(3, 3), padding='same', activation='relu'))
+    model.add(BatchNormalization(axis=3))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
+    model.add(Dropout(0.4))
 
-    model.add(Conv2D(filters=64, kernel_size=(5, 5), padding='same', activation='relu'))
-
+    model.add(Conv2D(filters=128, kernel_size=(3, 3), padding='same', activation='relu'))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
+    model.add(BatchNormalization(axis=3))
+    model.add(Dropout(0.2))
+
+    model.add(Conv2D(filters=192, kernel_size=(3, 3), padding='same', activation='relu'))
+    model.add(BatchNormalization(axis=3))
+    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
+    model.add(Dropout(0.4))
+
+    model.add(Conv2D(filters=256, kernel_size=(3, 3), padding='same', activation='relu'))
+    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
+    model.add(BatchNormalization(axis=3))
+    model.add(Dropout(0.2))
 
     model.add(Flatten())
 
     model.add(Dense(1024, activation='relu'))
 
-    model.add(Dropout(0.4))
+    model.add(Dropout(0.5))
 
     model.add(Dense(num_classes, activation='softmax'))
 
     # Optimizer
-    opt = keras.optimizers.Adadelta(lr=learning_rate)
+    # opt = keras.optimizers.Adadelta(lr=learning_rate)
+    opt = keras.optimizers.SGD(lr=learning_rate, momentum=0.9, decay=0.0, nesterov=False)
+    # opt = keras.optimizers.Adam(lr=learning_rate)
 
     model.compile(loss=keras.losses.categorical_crossentropy, optimizer=opt,
                   metrics=['accuracy'])
@@ -56,7 +69,8 @@ def build_model(img_size, num_channels, num_classes, learning_rate):
 def train(model, x_train, y_train, x_valid, y_valid, batch_size, epochs, log_dir):
     # Use tensorboard
     # cli => tensorboard --logdir path_to_dir
-    tensorboard = keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=0, write_graph=True, write_images=True)
+    tensorboard = keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, write_graph=True,
+                                              batch_size=batch_size)
 
     # Train
     # NOTE* - The validation set is checked during training to monitor progress,
@@ -64,8 +78,6 @@ def train(model, x_train, y_train, x_valid, y_valid, batch_size, epochs, log_dir
     # REF -> https://github.com/keras-team/keras/issues/1753
     model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=1,
               validation_data=(x_valid, y_valid), callbacks=[tensorboard])
-
-    return model
 
 
 def evaluate(model, classes, x_test, y_test, output_dir):
@@ -126,6 +138,7 @@ def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix'
 
 
 def save_model(model, classes, model_name, input_node_names, output_node_name, output_dir):
+    print('Saving model details')
     # Save model config
     model_json = model.to_json()
     with open(output_dir + 'model_config.json', 'w') as f:
@@ -139,6 +152,7 @@ def save_model(model, classes, model_name, input_node_names, output_node_name, o
     with open(output_dir + 'trained_labels.txt', 'w') as f:
         f.write('\n'.join(classes) + '\n')
 
+    print('Saving trained model')
     # Save trained model with the weights stored as constants
     temp_dir = output_dir + 'temp/'
 
@@ -149,13 +163,15 @@ def save_model(model, classes, model_name, input_node_names, output_node_name, o
                               temp_dir + model_name + '.chkp', output_node_name, 'save/restore_all', 'save/Const:0',
                               output_dir + 'frozen_' + model_name + '.pb', True, '')
 
+    print('Saving trained model (optimize version')
     # Save opt model
     # NOTE* - There is some problem, TensorFlow Lite cannot use this graph due to some error
     input_graph_def = tf.GraphDef()
     with tf.gfile.Open(output_dir + 'frozen_' + model_name + '.pb', "rb") as f:
         input_graph_def.ParseFromString(f.read())
 
-    output_graph_def = optimize_for_inference_lib.optimize_for_inference(input_graph_def, input_node_names,
+    output_graph_def = optimize_for_inference_lib.optimize_for_inference(input_graph_def,
+                                                                         [input_node_names],
                                                                          [output_node_name],
                                                                          tf.float32.as_datatype_enum)
 
@@ -187,11 +203,11 @@ def get_model_memory_usage(batch_size, model):
     return gbytes
 
 
-def make_hparam_string(learning_rate, batch_size, epochs):
+def make_hparam_string(opt, learning_rate, batch_size, epochs):
     # Get current current time
     t = time.strftime('%Y-%m-%d_%H-%M-%S')
 
-    return '%s,lr=%s,b=%d,e=%d/' % (t, learning_rate, batch_size, epochs)
+    return '%s,opt=%s,lr=%s,b=%d,e=%d/' % (t, opt, learning_rate, batch_size, epochs)
 
 
 def main():
@@ -200,8 +216,8 @@ def main():
     # Config
     model_name = 'banknotes_convnet'
 
-    img_dir = '../files/thaibaht_photos/'
-    output_dir = '../files/models/'
+    train_data_dir = '../files/thaibaht_photos_diff/train'
+    valid_data_dir = '../files/thaibaht_photos_diff/valid'
     log_dir = '../files/training_logs/'
 
     img_size = 128
@@ -210,17 +226,19 @@ def main():
     batch_size = 32
     epochs = 30
 
-    learning_rate = 1.0
+    learning_rate = 0.001
 
-    validation_percentage = 0.1
-    testing_percentage = 0.3
+    train_data, train_classes = Data.load_data(train_data_dir, img_size)
+    valid_data, valid_classes = Data.load_data(valid_data_dir, img_size)
 
-    datasets = Dataset.read_datasets(img_dir, img_size, validation_percentage, testing_percentage)
+    classes = train_classes
+    num_classes = len(train_classes)
 
-    classes = datasets.classes
-    num_classes = len(classes)
-
+    # TODO - Create new model
     model = build_model(img_size, num_channels, num_classes, learning_rate)
+
+    input_node_names = model.input.name.split(':')[0]
+    output_node_name = model.output.name.split(':')[0]
 
     # View model
     model.summary()
@@ -229,39 +247,37 @@ def main():
     print('Approximately memory usage : {} gb'.format(get_model_memory_usage(batch_size, model)))
 
     # Get data and shuffle
-    x_train = datasets.training_data.images_data
-    y_train = datasets.training_data.labels_onehot
+    x_train = train_data.images_data
+    y_train = train_data.labels_onehot
 
-    x_train, y_train = shuffle(x_train, y_train, random_state=1)
+    x_train, y_train = shuffle(x_train, y_train, random_state=2)
 
-    x_valid = datasets.validation_data.images_data
-    y_valid = datasets.validation_data.labels_onehot
+    x_valid = valid_data.images_data
+    y_valid = valid_data.labels_onehot
 
     x_valid, y_valid = shuffle(x_valid, y_valid, random_state=2)
 
-    x_test = datasets.testing_data.images_data
-    y_test = datasets.testing_data.labels_onehot
-
-    x_test, y_test = shuffle(x_test, y_test, random_state=3)
+    # Get opt name
+    opt_name = model.optimizer.__class__.__name__
 
     # Get folder name
-    hparam_str = make_hparam_string(learning_rate, batch_size, epochs)
+    hparam_str = make_hparam_string(opt_name, learning_rate, batch_size, epochs)
     log_dir += hparam_str
-    output_dir += hparam_str
+    output_dir = log_dir + 'model/'
 
     prepare_dir(output_dir)
 
-    model = train(model=model,
-                  x_train=x_train, y_train=y_train,
-                  x_valid=x_valid, y_valid=y_valid,
-                  batch_size=batch_size, epochs=epochs, log_dir=log_dir)
+    train(model=model,
+          x_train=x_train, y_train=y_train,
+          x_valid=x_valid, y_valid=y_valid,
+          batch_size=batch_size, epochs=epochs, log_dir=log_dir)
 
-    evaluate(model=model, classes=classes, x_test=x_test, y_test=y_test, output_dir=output_dir)
+    evaluate(model=model, classes=classes, x_test=x_valid, y_test=y_valid, output_dir=output_dir)
 
     # Save model as file
-    save_model(model, classes, model_name, ['conv2d_1_input'], 'dense_2/Softmax', output_dir)
+    save_model(model, classes, model_name, input_node_names, output_node_name, output_dir)
 
-    plt.show()
+    # plt.show()
     print('--end--')
 
 
