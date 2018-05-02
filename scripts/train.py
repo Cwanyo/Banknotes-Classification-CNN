@@ -17,36 +17,30 @@ from tensorflow.python.tools import freeze_graph, optimize_for_inference_lib
 from tensorflow.python.platform import gfile
 
 import Data
+import visualization
 
 
 def build_model(img_size, num_channels, num_classes, learning_rate):
     model = Sequential()
 
-    model.add(Conv2D(filters=16, kernel_size=(3, 3), padding='same', activation='relu',
+    model.add(Conv2D(filters=64, kernel_size=(7, 7), strides=(2, 2), padding='same', activation='relu',
                      input_shape=(img_size, img_size, num_channels)))
-    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
-
-    model.add(Conv2D(filters=32, kernel_size=(3, 3), padding='same', activation='relu'))
     model.add(BatchNormalization(axis=3))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
-    model.add(Dropout(0.4))
 
-    model.add(Conv2D(filters=64, kernel_size=(3, 3), padding='same', activation='relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
-    model.add(BatchNormalization(axis=3))
-    model.add(Dropout(0.2))
-
-    model.add(Conv2D(filters=128, kernel_size=(3, 3), padding='same', activation='relu'))
+    model.add(Conv2D(filters=128, kernel_size=(5, 5), strides=(2, 2), padding='same', activation='relu'))
     model.add(BatchNormalization(axis=3))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
-    model.add(Dropout(0.4))
 
-    model.add(Conv2D(filters=192, kernel_size=(3, 3), padding='same', activation='relu'))
+    model.add(Conv2D(filters=256, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='relu'))
+    model.add(Conv2D(filters=256, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='relu'))
+
+    model.add(Conv2D(filters=128, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='relu'))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
-    model.add(BatchNormalization(axis=3))
-    model.add(Dropout(0.2))
 
     model.add(Flatten())
+
+    model.add(Dense(2048, activation='relu'))
 
     model.add(Dense(1024, activation='relu'))
 
@@ -71,7 +65,7 @@ def train(model, train_generator, valid_generator, batch_size, epochs, log_dir):
     tensorboard = keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=0, write_graph=True,
                                               batch_size=batch_size)
 
-    model.fit_generator(generator=train_generator, epochs=epochs, verbose=2, validation_data=valid_generator,
+    model.fit_generator(generator=train_generator, epochs=epochs, verbose=1, validation_data=valid_generator,
                         callbacks=[tensorboard])
 
     return model
@@ -152,6 +146,8 @@ def save_model(model, classes, model_name, input_node_names, output_node_name, o
         f.write('\n'.join(classes) + '\n')
 
     print('Saving trained model')
+    model.save_weights(output_dir + 'model_weights.h5')
+
     # Save trained model with the weights stored as constants
     temp_dir = output_dir + 'temp/'
 
@@ -223,9 +219,9 @@ def main():
     num_channels = 3
 
     batch_size = 32
-    epochs = 15
+    epochs = 50
 
-    learning_rate = 0.01
+    learning_rate = 0.001
 
     train_generator, valid_generator = Data.load_data_generator(train_data_dir, valid_data_dir, img_size, batch_size)
 
@@ -261,6 +257,10 @@ def main():
     # Save model as file
     save_model(model, classes, model_name, input_node_names, output_node_name, output_dir)
 
+    # fun
+    # img = visualization.view(model, 128, 'conv2d_5', 128)
+    # plt.imshow(img)
+    # plt.savefig(output_dir + 'vis_last_filter.jpg')
     # plt.show()
     print('--end--')
 
