@@ -223,9 +223,9 @@ def main():
     num_channels = 3
 
     batch_size = 32
-    epochs = 2
+    epochs = 15
 
-    learning_rate = 0.001
+    learning_rate = 0.01
 
     train_generator, valid_generator = Data.load_data_generator(train_data_dir, valid_data_dir, img_size, batch_size)
 

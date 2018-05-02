@@ -96,12 +96,12 @@ def test():
 
 def main():
     print('--start--')
-    img_file = './t1.jpg'
+    img_file = './t.jpg'
 
     # runs = '2018-04-27_00-17-32,lr=0.001,b=32,e=30'
-    runs = '2018-04-28_19-48-03,opt=Adam,lr=0.001,b=32,e=30'
+    runs = '2018-04-30_12-21-03,opt=SGD,lr=0.001,b=32,e=60'
 
-    model_file = '../files/training_logs/' + runs + '/model/frozen_flower_convnet.pb'
+    model_file = '../files/training_logs/' + runs + '/model/frozen_flowers_convnet.pb'
     label_file = '../files/training_logs/' + runs + '/model/trained_labels.txt'
 
     img_size = 128
