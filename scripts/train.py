@@ -23,7 +23,7 @@ def build_model(img_size, num_channels, num_classes, learning_rate):
     model = Sequential()
 
     model.add(Conv2D(filters=16, kernel_size=(3, 3), padding='same', activation='relu',
-                     input_shape=[img_size, img_size, num_channels]))
+                     input_shape=(img_size, img_size, num_channels)))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
 
     model.add(Conv2D(filters=32, kernel_size=(3, 3), padding='same', activation='relu'))
