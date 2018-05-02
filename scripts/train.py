@@ -152,6 +152,8 @@ def save_model(model, classes, model_name, input_node_names, output_node_name, o
         f.write('\n'.join(classes) + '\n')
 
     print('Saving trained model')
+    model.save_weights(output_dir + 'model_weights.h5')
+    
     # Save trained model with the weights stored as constants
     temp_dir = output_dir + 'temp/'
 
