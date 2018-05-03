@@ -22,31 +22,24 @@ import Data
 def build_model(img_size, num_channels, num_classes, learning_rate):
     model = Sequential()
 
-    model.add(Conv2D(filters=16, kernel_size=(3, 3), padding='same', activation='relu',
+    model.add(Conv2D(filters=64, kernel_size=(7, 7), strides=(2, 2), padding='same', activation='relu',
                      input_shape=(img_size, img_size, num_channels)))
-    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
-
-    model.add(Conv2D(filters=32, kernel_size=(3, 3), padding='same', activation='relu'))
     model.add(BatchNormalization(axis=3))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
-    model.add(Dropout(0.4))
 
-    model.add(Conv2D(filters=64, kernel_size=(3, 3), padding='same', activation='relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
-    model.add(BatchNormalization(axis=3))
-    model.add(Dropout(0.2))
-
-    model.add(Conv2D(filters=128, kernel_size=(3, 3), padding='same', activation='relu'))
+    model.add(Conv2D(filters=128, kernel_size=(5, 5), strides=(2, 2), padding='same', activation='relu'))
     model.add(BatchNormalization(axis=3))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
-    model.add(Dropout(0.4))
 
-    model.add(Conv2D(filters=192, kernel_size=(3, 3), padding='same', activation='relu'))
+    model.add(Conv2D(filters=256, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='relu'))
+    model.add(Conv2D(filters=256, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='relu'))
+
+    model.add(Conv2D(filters=128, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='relu'))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
-    model.add(BatchNormalization(axis=3))
-    model.add(Dropout(0.2))
 
     model.add(Flatten())
+
+    model.add(Dense(2048, activation='relu'))
 
     model.add(Dense(1024, activation='relu'))
 
@@ -75,7 +68,7 @@ def train(model, x_train, y_train, x_valid, y_valid, batch_size, epochs, log_dir
     # NOTE* - The validation set is checked during training to monitor progress,
     # and possibly for early stopping, but is never used for gradient descent.
     # REF -> https://github.com/keras-team/keras/issues/1753
-    model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=2,
+    model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=1,
               validation_data=(x_valid, y_valid), callbacks=[tensorboard])
 
 
